@@ -1,0 +1,32 @@
+services:
+  namenode:
+    image: apache/hadoop:3.5.0
+    hostname: namenode
+    user: root
+    command: ["hdfs", "namenode"]
+    ports:
+      - "9870:9870"
+    env_file:
+      - ./config
+    environment:
+      ENSURE_NAMENODE_DIR: /tmp/hadoop-root/dfs/name
+    volumes:
+      - namenode_data_root:/tmp/hadoop-root/dfs/name
+    restart: unless-stopped
+
+  datanode:
+    image: apache/hadoop:3.5.0
+    hostname: datanode
+    user: root
+    command: ["hdfs", "datanode"]
+    env_file:
+      - ./config
+    volumes:
+      - datanode_data_root:/tmp/hadoop-root/dfs/data
+    depends_on:
+      - namenode
+    restart: unless-stopped
+
+volumes:
+  namenode_data_root:
+  datanode_data_root:

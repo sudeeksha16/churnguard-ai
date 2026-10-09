@@ -1,0 +1,18 @@
+{
+  "records_consumed": 10000,
+  "churned_records": 2037,
+  "churn_rate": 0.2037,
+  "records_by_country": {
+    "France": 5014,
+    "Spain": 2477,
+    "Germany": 2509
+  },
+  "records_by_gender": {
+    "Female": 4543,
+    "Male": 5457
+  },
+  "topic": "churn-customers-full",
+  "consumer_group": "churnguard-full-run",
+  "generated_at_utc": "2026-10-09T18:42:36.714754+00:00",
+  "event_file": "C:\\Users\\Hp\\Documents\\ChatGPT\\chur\\results\\streamed_customers.jsonl"
+}

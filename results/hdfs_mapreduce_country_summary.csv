@@ -1,0 +1,5 @@
+country,customers,churned,stayed,churn_rate_percent
+France,5014,810,4204,16.15
+Germany,2509,814,1695,32.44
+Spain,2477,413,2064,16.67
+ALL,10000,2037,7963,20.37

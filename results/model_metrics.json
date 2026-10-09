@@ -1,0 +1,54 @@
+{
+  "model": "Logistic Regression (balanced class weights)",
+  "target": "churn",
+  "excluded_columns": [
+    "customer_id"
+  ],
+  "train_rows": 8000,
+  "test_rows": 2000,
+  "test_churn_rate": 0.2035,
+  "accuracy": 0.7135,
+  "precision_churn": 0.38722826086956524,
+  "recall_churn": 0.7002457002457002,
+  "roc_auc": 0.7771654551315569,
+  "average_precision": 0.46791921719038454,
+  "confusion_matrix_labels_0_1": [
+    [
+      1142,
+      451
+    ],
+    [
+      122,
+      285
+    ]
+  ],
+  "classification_report": {
+    "0": {
+      "precision": 0.9034810126582279,
+      "recall": 0.7168863779033271,
+      "f1-score": 0.7994399719986,
+      "support": 1593.0
+    },
+    "1": {
+      "precision": 0.38722826086956524,
+      "recall": 0.7002457002457002,
+      "f1-score": 0.49868766404199477,
+      "support": 407.0
+    },
+    "accuracy": 0.7135,
+    "macro avg": {
+      "precision": 0.6453546367638966,
+      "recall": 0.7085660390745137,
+      "f1-score": 0.6490638180202973,
+      "support": 2000.0
+    },
+    "weighted avg": {
+      "precision": 0.798423577669235,
+      "recall": 0.7135,
+      "f1-score": 0.7382368773294309,
+      "support": 2000.0
+    }
+  },
+  "trained_at_utc": "2026-10-09T18:12:34.789569+00:00",
+  "caveat": "Historical churn-risk probability; dataset does not define a forecast horizon."
+}
