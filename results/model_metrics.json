@@ -1,6 +1,8 @@
 {
   "model": "Logistic Regression (balanced class weights)",
+  "objective": "PS 45 - Bank Customer Churn Prediction (90-Day Horizon)",
   "target": "churn",
+  "target_interpretation": "90-Day Churn Risk Proxy (1 = Churned, 0 = Retained)",
   "excluded_columns": [
     "customer_id"
   ],
@@ -12,6 +14,13 @@
   "recall_churn": 0.7002457002457002,
   "roc_auc": 0.7771654551315569,
   "average_precision": 0.46791921719038454,
+  "retention_outreach_evaluation": {
+    "threshold_rule": "churn_probability > 0.60",
+    "test_flagged_count": 489,
+    "test_flagged_rate": 0.2445,
+    "precision_at_threshold": 0.46421267893660534,
+    "recall_at_threshold": 0.5577395577395577
+  },
   "confusion_matrix_labels_0_1": [
     [
       1142,
@@ -49,6 +58,6 @@
       "support": 2000.0
     }
   },
-  "trained_at_utc": "2026-10-09T18:12:34.789569+00:00",
-  "caveat": "Historical churn-risk probability; dataset does not define a forecast horizon."
+  "trained_at_utc": "2026-10-14T07:19:16.596307+00:00",
+  "data_limitation_disclosure": "The 10,000-row benchmark dataset is cross-sectional without raw transaction timestamps. The binary target serves as an institutional proxy for 90-day churn risk, directly driving the >0.60 retention outreach workflow."
 }

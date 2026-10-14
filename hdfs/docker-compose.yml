@@ -3,7 +3,7 @@ services:
     image: apache/hadoop:3.5.0
     hostname: namenode
     user: root
-    command: ["hdfs", "namenode"]
+    command: ["/bin/bash", "-c", "if [ ! -d /tmp/hadoop-root/dfs/name/current ]; then hdfs namenode -format -force; fi; hdfs namenode"]
     ports:
       - "9870:9870"
     env_file:

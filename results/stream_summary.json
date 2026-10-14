@@ -11,8 +11,8 @@
     "Female": 4543,
     "Male": 5457
   },
-  "topic": "churn-customers-full",
-  "consumer_group": "churnguard-full-run",
-  "generated_at_utc": "2026-10-09T18:42:36.714754+00:00",
-  "event_file": "C:\\Users\\Hp\\Documents\\ChatGPT\\chur\\results\\streamed_customers.jsonl"
+  "topic": "churn-customers",
+  "consumer_group": "churnguard-analytics",
+  "generated_at_utc": "2026-10-14T07:24:22.054398+00:00",
+  "event_file": "results\\streamed_customers.jsonl"
 }

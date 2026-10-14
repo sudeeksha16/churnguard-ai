@@ -69,6 +69,11 @@ def main() -> None:
     finally:
         consumer.close()
 
+    try:
+        event_file_str = str(args.output.resolve().relative_to(ROOT.resolve()))
+    except ValueError:
+        event_file_str = str(args.output)
+
     summary = {
         "records_consumed": count,
         "churned_records": churn_count,
@@ -78,7 +83,7 @@ def main() -> None:
         "topic": args.topic,
         "consumer_group": args.group,
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
-        "event_file": str(args.output),
+        "event_file": event_file_str,
     }
     args.summary.write_text(json.dumps(summary, indent=2), encoding="utf-8")
     print(f"Consumed {count:,} records; wrote {args.output} and {args.summary}.")

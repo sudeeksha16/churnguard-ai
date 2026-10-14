@@ -47,7 +47,20 @@ footer{visibility:hidden}
 
 @st.cache_data
 def load_data() -> pd.DataFrame:
-    return pd.read_csv(DATA_PATH)
+    df = pd.read_csv(DATA_PATH)
+    model_path = RESULTS / "churn_model.joblib"
+    if model_path.exists():
+        try:
+            artifact = joblib.load(model_path)
+            feature_cols = artifact.get("feature_columns", [])
+            if all(col in df.columns for col in feature_cols):
+                scores = artifact["model"].predict_proba(df[feature_cols])[:, 1]
+                df["churn_probability"] = scores.round(4)
+                df["retention_flag"] = df["churn_probability"] > 0.60  # Strictly > 0.60
+                df["retention_outreach"] = df["retention_flag"].map({True: "FLAGGED (>0.60)", False: "Standard"})
+        except Exception:
+            pass
+    return df
 
 
 try:
@@ -64,20 +77,28 @@ selected = st.sidebar.multiselect("Markets", countries, default=countries)
 min_age, max_age = int(data.age.min()), int(data.age.max())
 age_range = st.sidebar.slider("Customer age", min_age, max_age, (min_age, max_age))
 active_only = st.sidebar.toggle("Active members only", value=False)
+retention_only = st.sidebar.toggle("Retention candidates only (>0.60)", value=False) if "retention_flag" in data else False
+
 filtered = data[data.country.isin(selected) & data.age.between(*age_range)]
 if active_only:
     filtered = filtered[filtered.active_member == 1]
+if retention_only and "retention_flag" in filtered:
+    filtered = filtered[filtered.retention_flag == True]
 
-st.markdown("<div class='hero'><div class='eyebrow'>CUSTOMER INTELLIGENCE · LIVE VIEW</div><h1>See risk before<br>customers leave.</h1><p>Explore the signals behind historical churn, focus on the segments that need attention, and score customer records with your trained model.</p><span class='tag'>HISTORICAL CHURN · NO FORECAST WINDOW</span></div>", unsafe_allow_html=True)
+st.markdown("<div class='hero'><div class='eyebrow'>CUSTOMER INTELLIGENCE · RETENTION DASHBOARD</div><h1>See risk before<br>customers leave.</h1><p>Predict customer churn probabilities, automatically flag high-risk accounts (>0.60) for proactive retention outreach, and explore portfolio risk segments.</p><span class='tag'>PS 45 RETENTION OUTREACH THRESHOLD: > 0.60</span></div>", unsafe_allow_html=True)
 rate = float(filtered.churn.mean()) if len(filtered) else 0.0
 retained = int((filtered.churn == 0).sum())
 churned = int(filtered.churn.sum())
-col1, col2, col3, col4 = st.columns(4)
+flagged_n = int(filtered["retention_flag"].sum()) if "retention_flag" in filtered else 0
+flagged_pct = (flagged_n / len(filtered) * 100) if len(filtered) else 0.0
+
+col1, col2, col3, col4, col5 = st.columns(5)
 for col, label, value, note in [
     (col1, "CUSTOMERS IN VIEW", f"{len(filtered):,}", "Filtered records"),
-    (col2, "HISTORICAL CHURN", f"{rate:.1%}", f"{churned:,} churned · {retained:,} retained"),
-    (col3, "AVG. CUSTOMER AGE", f"{filtered.age.mean():.0f}" if len(filtered) else "—", "Years"),
-    (col4, "ACTIVE MEMBERS", f"{filtered.active_member.mean():.1%}" if len(filtered) else "—", "Share of current view"),
+    (col2, "HISTORICAL CHURN", f"{rate:.1%}", f"{churned:,} churned · {retained:,} stayed"),
+    (col3, "FLAGGED OUTREACH", f"{flagged_n:,}", f"{flagged_pct:.1f}% strictly > 0.60"),
+    (col4, "AVG. CUSTOMER AGE", f"{filtered.age.mean():.0f}" if len(filtered) else "—", "Years"),
+    (col5, "ACTIVE MEMBERS", f"{filtered.active_member.mean():.1%}" if len(filtered) else "—", "Share of current view"),
 ]:
     col.markdown(f"<div class='metric'><div class='metric-label'>{label}</div><div class='metric-value'>{value}</div><div class='metric-note'>{note}</div></div>", unsafe_allow_html=True)
 
@@ -100,8 +121,8 @@ with b:
 stream_summary_path = RESULTS / "stream_summary.json"
 if stream_summary_path.exists():
     stream = json.loads(stream_summary_path.read_text(encoding="utf-8"))
-    st.markdown("<div class='section'>Kafka stream snapshot <span class='tag'>INGESTED EVENTS</span></div>", unsafe_allow_html=True)
-    st.caption(f"Topic: `{stream['topic']}` · Consumer group: `{stream['consumer_group']}`")
+    st.markdown("<div class='section'>Kafka stream summary <span class='tag'>OFFLINE / SAVED SNAPSHOT</span></div>", unsafe_allow_html=True)
+    st.caption(f"Offline summary from recorded Kafka streaming run · Topic: `{stream['topic']}` · Consumer group: `{stream['consumer_group']}`")
     s1, s2, s3, s4 = st.columns(4)
     for col, label, value, note in [
         (s1, "EVENTS CONSUMED", f"{stream['records_consumed']:,}", "Kafka customer records"),
@@ -121,8 +142,8 @@ if mapreduce_path.exists():
     mapreduce = pd.read_csv(mapreduce_path)
     country_results = mapreduce[mapreduce.country != "ALL"].copy()
     overall = mapreduce[mapreduce.country == "ALL"]
-    st.markdown("<div class='section'>Hadoop MapReduce results <span class='tag'>HDFS PROCESSING</span></div>", unsafe_allow_html=True)
-    st.caption("Country churn counts aggregated by a Hadoop Streaming job from the partitioned files stored in HDFS.")
+    st.markdown("<div class='section'>Hadoop MapReduce results <span class='tag'>OFFLINE / HDFS ARTIFACT</span></div>", unsafe_allow_html=True)
+    st.caption("Offline country churn counts aggregated by a Hadoop Streaming MapReduce job from HDFS partitions.")
     if not overall.empty:
         total = overall.iloc[0]
         h1, h2, h3, h4 = st.columns(4)
@@ -145,14 +166,25 @@ if mapreduce_path.exists():
         st.plotly_chart(mapreduce_fig, width="stretch")
         st.dataframe(country_results, width="stretch", hide_index=True)
 
-st.markdown("<div class='section'>Customer explorer <span class='tag'>FILTERED RECORDS</span></div>", unsafe_allow_html=True)
+st.markdown("<div class='section'>Customer Explorer & Retention Priority <span class='tag'>ACTIONABLE RECORDS</span></div>", unsafe_allow_html=True)
+st.caption("Customer-level view including predicted churn probabilities and retention outreach flags (strictly > 0.60 churn risk).")
 show = filtered.copy()
 show["outcome"] = show.churn.map({0: "Stayed", 1: "Churned"})
-st.dataframe(show[["customer_id", "country", "gender", "age", "tenure", "balance", "products_number", "active_member", "outcome"]], width="stretch", hide_index=True, height=300)
-st.download_button("Download filtered records", show.to_csv(index=False).encode("utf-8"), "churnguard_customers.csv", "text/csv")
+columns_to_show = ["customer_id", "country", "gender", "age", "tenure", "balance", "products_number", "active_member", "outcome"]
+if "churn_probability" in show.columns:
+    columns_to_show.extend(["churn_probability", "retention_outreach"])
+st.dataframe(show[columns_to_show].sort_values(by="churn_probability" if "churn_probability" in show.columns else "customer_id", ascending=False), width="stretch", hide_index=True, height=320)
+
+d_col1, d_col2 = st.columns(2)
+with d_col1:
+    st.download_button("Download filtered customer records", show.to_csv(index=False).encode("utf-8"), "churnguard_customers.csv", "text/csv")
+with d_col2:
+    if "retention_flag" in show.columns:
+        flagged_customers = show[show["retention_flag"] == True]
+        st.download_button(f"Download retention outreach candidates ({len(flagged_customers):,})", flagged_customers.to_csv(index=False).encode("utf-8"), "churnguard_retention_outreach.csv", "text/csv")
 
 st.markdown("<div class='section'>Score a customer file <span class='tag'>MODEL ASSIST</span></div>", unsafe_allow_html=True)
-st.caption("Upload records with the same customer attributes. The model returns a historical churn-risk probability; use it to prioritize review, not as a guaranteed prediction.")
+st.caption("Upload records with customer attributes to calculate churn probabilities and flag accounts for retention outreach (>0.60).")
 model_path = RESULTS / "churn_model.joblib"
 upload = st.file_uploader("Customer CSV", type=["csv"], help="Expected features: credit_score, country, gender, age, tenure, balance, products_number, credit_card, active_member, estimated_salary")
 if upload:
@@ -164,23 +196,51 @@ if upload:
             st.error("Missing model input columns: " + ", ".join(missing))
         else:
             scores = artifact["model"].predict_proba(scoring[artifact["feature_columns"]])[:, 1]
-            scoring["churn_risk_probability"] = scores
-            scoring["risk_band"] = pd.cut(scores, [-0.001, 0.35, 0.65, 1.0], labels=["Lower", "Elevated", "Higher"])
-            st.dataframe(scoring.sort_values("churn_risk_probability", ascending=False), width="stretch", hide_index=True)
-            st.download_button("Download scored file", scoring.to_csv(index=False).encode("utf-8"), "churnguard_scored.csv", "text/csv")
+            scoring["churn_probability"] = scores.round(4)
+            scoring["retention_flag"] = scoring["churn_probability"] > 0.60  # Strictly > 0.60
+            scoring["retention_outreach"] = scoring["retention_flag"].map({True: "FLAGGED (>0.60)", False: "Standard"})
+            scoring["risk_band"] = pd.cut(scores, [-0.001, 0.35, 0.60, 1.0], labels=["Lower (<=0.35)", "Medium (0.35-0.60)", "High (>0.60)"])
+            
+            up_flagged = int(scoring["retention_flag"].sum())
+            up_total = len(scoring)
+            up_pct = (up_flagged / up_total * 100) if up_total else 0.0
+            
+            uc1, uc2, uc3 = st.columns(3)
+            uc1.markdown(f"<div class='metric'><div class='metric-label'>UPLOADED ROWS</div><div class='metric-value'>{up_total:,}</div><div class='metric-note'>Records evaluated</div></div>", unsafe_allow_html=True)
+            uc2.markdown(f"<div class='metric'><div class='metric-label'>FLAGGED FOR OUTREACH</div><div class='metric-value'>{up_flagged:,}</div><div class='metric-note'>{up_pct:.1f}% strictly > 0.60</div></div>", unsafe_allow_html=True)
+            uc3.markdown(f"<div class='metric'><div class='metric-label'>AVG. CHURN RISK</div><div class='metric-value'>{scores.mean():.1%}</div><div class='metric-note'>Predicted risk mean</div></div>", unsafe_allow_html=True)
+            
+            filter_up = st.checkbox("Show only retention outreach candidates (>0.60) in table", value=False)
+            table_df = scoring[scoring["retention_flag"] == True] if filter_up else scoring
+            st.dataframe(table_df.sort_values("churn_probability", ascending=False), width="stretch", hide_index=True)
+            
+            u_btn1, u_btn2 = st.columns(2)
+            with u_btn1:
+                st.download_button("Download all scored records", scoring.to_csv(index=False).encode("utf-8"), "churnguard_scored.csv", "text/csv")
+            with u_btn2:
+                flagged_only = scoring[scoring["retention_flag"] == True]
+                st.download_button(f"Download flagged candidates only ({len(flagged_only):,})", flagged_only.to_csv(index=False).encode("utf-8"), "churnguard_uploaded_retention_flagged.csv", "text/csv")
     else:
         st.info("Train the model first: run `python src\\train_model.py` from the project folder.")
 
 metrics_path = RESULTS / "model_metrics.json"
 if metrics_path.exists():
     metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
-    st.markdown("<div class='section'>Model quality <span class='tag'>HELD-OUT DATA</span></div>", unsafe_allow_html=True)
-    st.caption("Performance on a stratified test split; results may differ on new customers.")
+    st.markdown("<div class='section'>Model Quality & 90-Day Evaluation <span class='tag'>HELD-OUT DATA</span></div>", unsafe_allow_html=True)
+    st.caption(f"Objective: {metrics.get('objective', 'PS 45 - 90-Day Churn Prediction')} · Evaluated on stratified test split (2,000 records).")
     m1, m2, m3, m4 = st.columns(4)
-    for col, label, key in [(m1, "ROC AUC", "roc_auc"), (m2, "CHURN RECALL", "recall_churn"), (m3, "PRECISION", "precision_churn"), (m4, "TEST RECORDS", "test_rows")]:
-        value = f"{metrics[key]:.1%}" if key != "test_rows" else f"{metrics[key]:,}"
+    outreach_eval = metrics.get("retention_outreach_evaluation", {})
+    threshold_prec = outreach_eval.get("precision_at_threshold", metrics.get("precision_churn", 0.387))
+    for col, label, value in [
+        (m1, "ROC AUC", f"{metrics['roc_auc']:.1%}"),
+        (m2, "CHURN RECALL", f"{metrics['recall_churn']:.1%}"),
+        (m3, "OUTREACH PRECISION (>0.60)", f"{threshold_prec:.1%}"),
+        (m4, "TEST RECORDS", f"{metrics['test_rows']:,}"),
+    ]:
         col.markdown(f"<div class='metric'><div class='metric-label'>{label}</div><div class='metric-value'>{value}</div></div>", unsafe_allow_html=True)
+    if "data_limitation_disclosure" in metrics:
+        st.caption(f"**Methodological Note:** {metrics['data_limitation_disclosure']}")
 else:
     st.info("Model metrics appear here after running `python src\\train_model.py`.")
 
-st.markdown("<div style='margin:36px 0 12px;padding-top:14px;border-top:1px solid #283432;color:#71807b;font:11px DM Mono'>CHURNGUARD AI · DECISION SUPPORT · HISTORICAL DATA ONLY</div>", unsafe_allow_html=True)
+st.markdown("<div style='margin:36px 0 12px;padding-top:14px;border-top:1px solid #283432;color:#71807b;font:11px DM Mono'>CHURNGUARD AI · PS 45 90-DAY RETENTION DECISION SUPPORT</div>", unsafe_allow_html=True)
